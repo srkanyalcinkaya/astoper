@@ -240,6 +240,75 @@ Herhangi bir sorun yaşarsanız:
 2. API dokümantasyonunu inceleyin
 3. GitHub issues bölümünü kullanın
 
+## 🤝 Contributing / Katkıda Bulunma
+
+We welcome contributions from the community! / Topluluktan katkıları memnuniyetle karşılıyoruz!
+
+### How to Contribute / Nasıl Katkıda Bulunabilirsiniz
+
+1. **Fork the repository** / Repository'yi fork edin
+2. **Create a feature branch** / Özellik branch'i oluşturun
+3. **Make your changes** / Değişikliklerinizi yapın
+4. **Test your changes** / Değişikliklerinizi test edin
+5. **Submit a pull request** / Pull request gönderin
+
+### Contribution Areas / Katkı Alanları
+
+- 🐛 **Bug fixes** / Bug düzeltmeleri
+- ✨ **New features** / Yeni özellikler
+- 📚 **Documentation** / Dokümantasyon
+- 🧪 **Tests** / Testler
+- 🎨 **UI/UX improvements** / UI/UX iyileştirmeleri
+
+### Getting Started / Başlangıç
+
+1. Read our [Contributing Guide](CONTRIBUTING.md) / [Katkıda Bulunma Rehberi](CONTRIBUTING.md)'ni okuyun
+2. Check our [Code of Conduct](CODE_OF_CONDUCT.md) / [Davranış Kuralları](CODE_OF_CONDUCT.md)'mızı inceleyin
+3. Look for issues labeled "good first issue" / "good first issue" etiketli konulara bakın
+
+### Development Setup / Geliştirme Kurulumu
+
+```bash
+# Clone the repository / Repository'yi klonlayın
+git clone https://github.com/srkanyalcinkaya/astoper.git
+cd astoper
+
+# Create virtual environment / Sanal ortam oluşturun
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or / veya
+venv\Scripts\activate  # Windows
+
+# Install dependencies / Bağımlılıkları yükleyin
+pip install -r requirements.txt
+
+# Install frontend dependencies / Frontend bağımlılıklarını yükleyin
+cd frontend
+npm install
+cd ..
+
+# Run the application / Uygulamayı çalıştırın
+python main.py
+```
+
+### Reporting Issues / Sorun Bildirme
+
+If you find a bug or have a feature request, please:
+
+Eğer bir bug bulursanız veya özellik öneriniz varsa, lütfen:
+
+1. Check existing issues first / Önce mevcut konuları kontrol edin
+2. Create a new issue with detailed information / Detaylı bilgi ile yeni konu oluşturun
+3. Use appropriate labels / Uygun etiketleri kullanın
+
+### Pull Request Process / Pull Request Süreci
+
+1. Fork the repository / Repository'yi fork edin
+2. Create your feature branch / Özellik branch'inizi oluşturun
+3. Commit your changes / Değişikliklerinizi commit edin
+4. Push to the branch / Branch'e push edin
+5. Open a Pull Request / Pull Request açın
+
 ## 🔮 Gelecek Özellikler
 
 - [ ] Gerçek ödeme entegrasyonu
