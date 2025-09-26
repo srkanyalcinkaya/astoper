@@ -66,7 +66,6 @@ async def create_indexes():
     """Create database indexes for better performance."""
     try:
         await database.users.create_index("email", unique=True)
-        await database.users.create_index("username", unique=True)
         await database.users.create_index("is_active")
         
         await database.queries.create_index("user_id")
