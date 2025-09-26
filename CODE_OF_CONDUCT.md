@@ -96,9 +96,9 @@ Kabul edilemez davranış yaşarsanız veya tanık olursanız, veya başka endi�
 
 ## Contact Information / İletişim Bilgileri
 
-- **Project Maintainer**: [Name]
-- **Email**: [email@example.com]
-- **GitHub**: [@username]
+- **Project Maintainer**: Serkan
+- **Email**: syalcinkaya895@gmail.com
+- **GitHub**: [@srkanyalcinkaya]
 
 ## Acknowledgments / Teşekkürler
 
@@ -108,6 +108,6 @@ Bu Davranış Kuralları, https://www.contributor-covenant.org/version/2/0/code_
 
 ---
 
-**Last Updated / Son Güncelleme**: [Date]
+**Last Updated / Son Güncelleme**: 26.09.2025
 
-**Version / Sürüm**: 1.0
+**Version / Sürüm**: 1.0    
