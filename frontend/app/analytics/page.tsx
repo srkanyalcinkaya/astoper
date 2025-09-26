@@ -164,7 +164,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {analytics.topQueries.map((item, index) => (
+                {analytics.topQueries.map((item: { query: string; count: number; successRate: number }, index: number) => (
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex-1">
                       <p className="font-medium text-sm">{item.query}</p>
@@ -190,7 +190,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {analytics.monthlyData.map((month, index) => (
+                {analytics.monthlyData.map((month: { month: string; queries: number; emails: number }, index: number) => (
                   <div key={index} className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className="w-12 text-sm font-medium">{month.month}</div>
