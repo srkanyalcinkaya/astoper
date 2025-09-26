@@ -1,0 +1,8 @@
+<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer triangle -->
+  <path d="M10 45 L30 15 L50 45 L10 45 Z" fill="#1e40af" opacity="0.9"/>
+  <!-- Inner triangle -->
+  <path d="M15 40 L30 20 L45 40 L15 40 Z" fill="#3b82f6"/>
+  <!-- Text -->
+  <text x="65" y="35" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="#1e40af">Astoper</text>
+</svg>
