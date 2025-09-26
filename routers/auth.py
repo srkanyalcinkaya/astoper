@@ -27,6 +27,13 @@ async def register(user: UserCreate, db = Depends(get_async_db)):
                 detail="Bu email adresi zaten kullanılıyor"
             )
         
+        existing_username = await db.users.find_one({"username": user.username})
+        if existing_username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bu kullanıcı adı zaten kullanılıyor"
+            )
+        
         free_plan = await db.plans.find_one({"name": "Free"})
         if not free_plan:
             free_plan = await db.plans.find_one({"name": "Ücretsiz"})
@@ -35,6 +42,7 @@ async def register(user: UserCreate, db = Depends(get_async_db)):
         hashed_password = get_password_hash(user.password)
         new_user = {
             "email": user.email,
+            "username": user.username,
             "full_name": user.full_name,
             "hashed_password": hashed_password,
             "is_active": True,
@@ -55,6 +63,7 @@ async def register(user: UserCreate, db = Depends(get_async_db)):
         return {
             "id": created_user["_id"],
             "email": created_user["email"],
+            "username": created_user["username"],
             "full_name": created_user.get("full_name"),
             "is_active": created_user["is_active"],
             "created_at": created_user["created_at"],
