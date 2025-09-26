@@ -68,12 +68,12 @@ export default function Sidebar() {
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-gray-700">
-                  {user?.username?.charAt(0).toUpperCase()}
+                  {user?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
                 </span>
               </div>
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-700">{user?.full_name || user?.username}</p>
+              <p className="text-sm font-medium text-gray-700">{user?.full_name || user?.email}</p>
               <p className="text-xs text-gray-500">{user?.email}</p>
             </div>
           </div>

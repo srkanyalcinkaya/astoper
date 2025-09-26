@@ -3,7 +3,6 @@ import { persist } from 'zustand/middleware'
 
 export interface User {
   id: string
-  username: string
   email: string
   full_name?: string
   is_active: boolean

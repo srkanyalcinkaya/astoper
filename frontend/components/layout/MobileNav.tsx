@@ -108,11 +108,11 @@ export default function MobileNav() {
             <div className="flex items-center mb-4">
               <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-gray-700">
-                  {user?.username?.charAt(0).toUpperCase()}
+                  {user?.full_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase()}
                 </span>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700">{user?.full_name || user?.username}</p>
+                <p className="text-sm font-medium text-gray-700">{user?.full_name || user?.email}</p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
             </div>

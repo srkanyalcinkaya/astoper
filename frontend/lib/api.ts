@@ -160,7 +160,6 @@ export const apiService = {
 
   async updateUserProfile(data: {
     email?: string
-    username?: string
     full_name?: string
   }) {
     const response = await api.put('/users/me', data)

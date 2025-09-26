@@ -85,7 +85,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600">
-            Hoş geldin, {user?.full_name || user?.username}! Email otomasyonlarınızın özetini görün.
+            Hoş geldin, {user?.full_name || user?.email}! Email otomasyonlarınızın özetini görün.
           </p>
         </div>
 

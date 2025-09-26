@@ -55,7 +55,6 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    username: str
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -68,7 +67,6 @@ class UserLogin(BaseModel):
 
 class User(UserBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    username: str
     is_active: bool = True
     created_at: datetime
     plan_id: Optional[PyObjectId] = None
