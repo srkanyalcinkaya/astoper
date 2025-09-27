@@ -17,60 +17,89 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
     
+    print(f"🔔 Webhook received: {request.method} {request.url}")
+    print(f"📦 Payload size: {len(payload)} bytes")
+    print(f"🔐 Signature header: {sig_header[:20]}..." if sig_header else "No signature")
+    
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
         )
-    except ValueError:
+        print(f"✅ Event constructed successfully: {event['type']}")
+        print(f"📋 Event ID: {event['id']}")
+    except ValueError as e:
+        print(f"❌ Invalid payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError:
+    except stripe.error.SignatureVerificationError as e:
+        print(f"❌ Invalid signature: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
     
     db = await get_async_db()
     
     if event['type'] == 'checkout.session.completed':
+        print(f"🛒 Processing checkout.session.completed")
         session = event['data']['object']
         await handle_checkout_completed(db, session)
         
     elif event['type'] == 'customer.subscription.created':
+        print(f"🆕 Processing customer.subscription.created")
         subscription = event['data']['object']
         await handle_subscription_created(db, subscription)
         
     elif event['type'] == 'customer.subscription.updated':
+        print(f"🔄 Processing customer.subscription.updated")
         subscription = event['data']['object']
         await handle_subscription_updated(db, subscription)
         
     elif event['type'] == 'customer.subscription.deleted':
+        print(f"🗑️ Processing customer.subscription.deleted")
         subscription = event['data']['object']
         await handle_subscription_deleted(db, subscription)
         
     elif event['type'] == 'invoice.payment_succeeded':
+        print(f"💰 Processing invoice.payment_succeeded")
         invoice = event['data']['object']
         await handle_payment_succeeded(db, invoice)
         
     elif event['type'] == 'invoice.payment_failed':
+        print(f"❌ Processing invoice.payment_failed")
         invoice = event['data']['object']
         await handle_payment_failed(db, invoice)
         
     else:
-        print(f"Unhandled event type: {event['type']}")
+        print(f"⚠️ Unhandled event type: {event['type']}")
     
     return {"status": "success"}
 
 async def handle_checkout_completed(db, session):
     """Handle checkout session completed event"""
+    print(f"🛒 handle_checkout_completed called")
+    print(f"📋 Session ID: {session.get('id')}")
+    print(f"👤 Customer ID: {session.get('customer')}")
+    print(f"📊 Metadata: {session.get('metadata')}")
+    
     user_id_str = session["metadata"].get("user_id")
     plan_id_str = session["metadata"].get("plan_id")
     
+    print(f"🔍 User ID from metadata: {user_id_str}")
+    print(f"🔍 Plan ID from metadata: {plan_id_str}")
+    
     if not user_id_str or not plan_id_str:
-        print("Missing metadata in checkout session")
+        print("❌ Missing metadata in checkout session")
         return
     
     user_id = ObjectId(user_id_str)
     plan_id = ObjectId(plan_id_str)
     
+    print(f"✅ Parsed User ID: {user_id}")
+    print(f"✅ Parsed Plan ID: {plan_id}")
+    
     subscription_id = session["subscription"]
+    print(f"🔗 Subscription ID: {subscription_id}")
+    
     subscription = stripe.Subscription.retrieve(subscription_id)
+    print(f"📊 Stripe Subscription Status: {subscription.status}")
+    print(f"👤 Stripe Customer ID: {subscription.customer}")
     
     subscription_data = {
         "user_id": user_id,
@@ -84,20 +113,28 @@ async def handle_checkout_completed(db, session):
         "updated_at": datetime.utcnow()
     }
     
+    print(f"💾 Subscription data prepared: {subscription_data}")
+    
     existing_subscription = await db.subscriptions.find_one({
         "stripe_subscription_id": subscription.id
     })
     
     if not existing_subscription:
-        await db.subscriptions.insert_one(subscription_data)
+        print(f"➕ Creating new subscription in database")
+        result = await db.subscriptions.insert_one(subscription_data)
+        print(f"✅ Subscription created with ID: {result.inserted_id}")
+    else:
+        print(f"⚠️ Subscription already exists: {existing_subscription['_id']}")
     
-    await db.users.update_one(
+    print(f"👤 Updating user plan_id to: {plan_id}")
+    user_update_result = await db.users.update_one(
         {"_id": user_id},
         {"$set": {
             "plan_id": plan_id,
             "stripe_subscription_id": subscription.id
         }}
     )
+    print(f"✅ User updated: {user_update_result.modified_count} documents modified")
     
     plan = await db.plans.find_one({"_id": plan_id})
     
