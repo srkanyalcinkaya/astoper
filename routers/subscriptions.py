@@ -123,36 +123,116 @@ async def create_checkout_session(
                 {"_id": user_id},
                 {"$set": {"stripe_customer_id": stripe_customer_id}}
             )
+        else:
+            # Check if customer has existing subscriptions with different currency
+            try:
+                existing_subscriptions = stripe.Subscription.list(customer=stripe_customer_id, limit=1)
+                if existing_subscriptions.data:
+                    # Cancel existing subscriptions to allow new currency
+                    for sub in existing_subscriptions.data:
+                        if sub.status in ['active', 'trialing']:
+                            stripe.Subscription.delete(sub.id)
+                            # Update our database
+                            await db.subscriptions.update_one(
+                                {"stripe_subscription_id": sub.id},
+                                {"$set": {"status": "canceled", "updated_at": datetime.utcnow()}}
+                            )
+            except stripe.error.StripeError as e:
+                # If there's an issue with existing subscriptions, create new customer
+                print(f"Error checking existing subscriptions: {e}")
+                # Create new customer with unique email to avoid currency conflicts
+                unique_email = f"{user['email'].split('@')[0]}+usd@{user['email'].split('@')[1]}"
+                customer = stripe.Customer.create(
+                    email=unique_email,
+                    name=user.get("full_name") or user["username"],
+                    metadata={"user_id": str(user_id), "original_email": user["email"]}
+                )
+                stripe_customer_id = customer.id
+                
+                await db.users.update_one(
+                    {"_id": user_id},
+                    {"$set": {"stripe_customer_id": stripe_customer_id}}
+                )
         
-        checkout_session = stripe.checkout.Session.create(
-            customer=stripe_customer_id,
-            payment_method_types=['card'],
-            line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {
-                        'name': f"{plan['name']} Plan",
-                        'description': f"{plan['max_queries_per_month']} aylık sorgu, {plan['max_file_uploads']} dosya yükleme, sorgu başına {plan.get('max_results_per_query', 10)} sonuç"
+        try:
+            checkout_session = stripe.checkout.Session.create(
+                customer=stripe_customer_id,
+                payment_method_types=['card'],
+                line_items=[{
+                    'price_data': {
+                        'currency': 'usd',
+                        'product_data': {
+                            'name': f"{plan['name']} Plan",
+                            'description': f"{plan['max_queries_per_month']} aylık sorgu, {plan['max_file_uploads']} dosya yükleme, sorgu başına {plan.get('max_results_per_query', 10)} sonuç"
+                        },
+                        'unit_amount': int(plan["price"] * 100),  # Convert to cents (USD)
+                        'recurring': {'interval': 'month'}
                     },
-                    'unit_amount': int(plan["price"] * 100),  # Convert to cents (USD)
-                    'recurring': {'interval': 'month'}
-                },
-                'quantity': 1,
-            }],
-            mode='subscription',
-            success_url=f"{BASE_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&plan_id={request.plan_id}",
-            cancel_url=f"{BASE_URL}/payment/cancel",
-            metadata={
-                'user_id': str(user_id),
-                'plan_id': request.plan_id
-            },
-            subscription_data={
-                'metadata': {
+                    'quantity': 1,
+                }],
+                mode='subscription',
+                success_url=f"{BASE_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&plan_id={request.plan_id}",
+                cancel_url=f"{BASE_URL}/payment/cancel",
+                metadata={
                     'user_id': str(user_id),
                     'plan_id': request.plan_id
+                },
+                subscription_data={
+                    'metadata': {
+                        'user_id': str(user_id),
+                        'plan_id': request.plan_id
+                    }
                 }
-            }
-        )
+            )
+        except stripe.error.StripeError as e:
+            if "currency" in str(e).lower():
+                # Currency conflict - create new customer
+                print(f"Currency conflict detected: {e}")
+                unique_email = f"{user['email'].split('@')[0]}+usd{datetime.utcnow().timestamp()}@{user['email'].split('@')[1]}"
+                customer = stripe.Customer.create(
+                    email=unique_email,
+                    name=user.get("full_name") or user["username"],
+                    metadata={"user_id": str(user_id), "original_email": user["email"]}
+                )
+                stripe_customer_id = customer.id
+                
+                await db.users.update_one(
+                    {"_id": user_id},
+                    {"$set": {"stripe_customer_id": stripe_customer_id}}
+                )
+                
+                # Retry checkout with new customer
+                checkout_session = stripe.checkout.Session.create(
+                    customer=stripe_customer_id,
+                    payment_method_types=['card'],
+                    line_items=[{
+                        'price_data': {
+                            'currency': 'usd',
+                            'product_data': {
+                                'name': f"{plan['name']} Plan",
+                                'description': f"{plan['max_queries_per_month']} aylık sorgu, {plan['max_file_uploads']} dosya yükleme, sorgu başına {plan.get('max_results_per_query', 10)} sonuç"
+                            },
+                            'unit_amount': int(plan["price"] * 100),
+                            'recurring': {'interval': 'month'}
+                        },
+                        'quantity': 1,
+                    }],
+                    mode='subscription',
+                    success_url=f"{BASE_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&plan_id={request.plan_id}",
+                    cancel_url=f"{BASE_URL}/payment/cancel",
+                    metadata={
+                        'user_id': str(user_id),
+                        'plan_id': request.plan_id
+                    },
+                    subscription_data={
+                        'metadata': {
+                            'user_id': str(user_id),
+                            'plan_id': request.plan_id
+                        }
+                    }
+                )
+            else:
+                raise e
         
         await db.logs.insert_one({
             "user_id": user_id,
