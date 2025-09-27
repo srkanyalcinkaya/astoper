@@ -10,8 +10,12 @@ from pydantic import BaseModel
 from database import get_async_db
 from models import Subscription, Plan, User
 from config import settings
+import os
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+# Environment-based URL configuration
+BASE_URL = os.getenv("BASE_URL", "https://astoper.com")
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 security = HTTPBearer()
@@ -136,8 +140,8 @@ async def create_checkout_session(
                 'quantity': 1,
             }],
             mode='subscription',
-            success_url=f"http://localhost:3000/payment/success?session_id={{CHECKOUT_SESSION_ID}}&plan_id={request.plan_id}",
-            cancel_url="http://localhost:3000/payment/cancel",
+            success_url=f"{BASE_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&plan_id={request.plan_id}",
+            cancel_url=f"{BASE_URL}/payment/cancel",
             metadata={
                 'user_id': str(user_id),
                 'plan_id': request.plan_id
