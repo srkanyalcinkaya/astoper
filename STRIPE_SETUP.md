@@ -36,7 +36,7 @@ STRIPE_SECRET_KEY=sk_live_51...
 
 1. **Stripe Dashboard** → **Developers** → **Webhooks**
 2. **Add endpoint** butonuna tıklayın
-3. **Endpoint URL**: `https://yourdomain.com/webhooks/stripe`
+3. **Endpoint URL**: `https://astoper.com/webhooks/stripe`
 4. **Events to send**:
    - `customer.subscription.created`
    - `customer.subscription.updated`

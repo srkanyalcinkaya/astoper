@@ -129,12 +129,12 @@ async def create_checkout_session(
             payment_method_types=['card'],
             line_items=[{
                 'price_data': {
-                    'currency': 'try',
+                    'currency': 'usd',
                     'product_data': {
                         'name': f"{plan['name']} Plan",
                         'description': f"{plan['max_queries_per_month']} aylık sorgu, {plan['max_file_uploads']} dosya yükleme, sorgu başına {plan.get('max_results_per_query', 10)} sonuç"
                     },
-                    'unit_amount': int(plan["price"] * 100),  # Convert to kuruş
+                    'unit_amount': int(plan["price"] * 100),  # Convert to cents (USD)
                     'recurring': {'interval': 'month'}
                 },
                 'quantity': 1,
@@ -157,7 +157,7 @@ async def create_checkout_session(
         await db.logs.insert_one({
             "user_id": user_id,
             "action": "checkout_session_created",
-            "details": f"Stripe Checkout oturumu oluşturuldu: {plan['name']} - ₺{plan['price']}/ay",
+            "details": f"Stripe Checkout oturumu oluşturuldu: {plan['name']} - ${plan['price']}/ay",
             "created_at": datetime.utcnow()
         })
         
@@ -213,7 +213,7 @@ async def upgrade_subscription(
             items=[{
                 "id": stripe_subscription["items"]["data"][0].id,
                 "price_data": {
-                    "currency": "try",
+                    "currency": "usd",
                     "product_data": {
                         "name": new_plan["name"],
                         "description": f"{new_plan['name']} - {new_plan['max_queries_per_month']} aylık sorgu"
@@ -244,7 +244,7 @@ async def upgrade_subscription(
         await db.logs.insert_one({
             "user_id": user_id,
             "action": "subscription_upgraded",
-            "details": f"Abonelik yükseltildi: {new_plan['name']} - ₺{new_plan['price']}/ay",
+            "details": f"Abonelik yükseltildi: {new_plan['name']} - ${new_plan['price']}/ay",
             "created_at": datetime.utcnow()
         })
         

@@ -213,7 +213,7 @@ async def handle_payment_succeeded(db, invoice):
     await db.logs.insert_one({
         "user_id": user["_id"],
         "action": "payment_succeeded",
-        "details": f"Stripe webhook: Ödeme başarılı - Tutar: ₺{invoice['amount_paid']/100}",
+        "details": f"Stripe webhook: Ödeme başarılı - Tutar: ${invoice['amount_paid']/100}",
         "created_at": datetime.utcnow()
     })
 
@@ -233,6 +233,6 @@ async def handle_payment_failed(db, invoice):
     await db.logs.insert_one({
         "user_id": user["_id"],
         "action": "payment_failed",
-        "details": f"Stripe webhook: Ödeme başarısız - Tutar: ₺{invoice['amount_due']/100}",
+        "details": f"Stripe webhook: Ödeme başarısız - Tutar: ${invoice['amount_due']/100}",
         "created_at": datetime.utcnow()
     })
