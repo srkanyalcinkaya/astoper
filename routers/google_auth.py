@@ -92,6 +92,8 @@ async def google_login(request: dict):
                 {"$set": {
                     "google_id": google_user["google_id"],
                     "google_picture": google_user["picture"],
+                    "username": google_user["email"].split("@")[0],
+                    "full_name": google_user["name"],
                     "last_login": datetime.utcnow()
                 }}
             )
@@ -136,7 +138,7 @@ async def google_login(request: dict):
             "user": {
                 "id": str(user["_id"]),
                 "email": user["email"],
-                "username": user["username"],
+                "username": user.get("username", user["email"].split("@")[0]),
                 "full_name": user.get("full_name"),
                 "picture": user.get("google_picture"),
                 "is_active": user["is_active"],
