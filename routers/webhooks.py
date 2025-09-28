@@ -36,38 +36,44 @@ async def stripe_webhook(request: Request):
     
     db = await get_async_db()
     
-    if event['type'] == 'checkout.session.completed':
-        print(f"🛒 Processing checkout.session.completed")
-        session = event['data']['object']
-        await handle_checkout_completed(db, session)
-        
-    elif event['type'] == 'customer.subscription.created':
-        print(f"🆕 Processing customer.subscription.created")
-        subscription = event['data']['object']
-        await handle_subscription_created(db, subscription)
-        
-    elif event['type'] == 'customer.subscription.updated':
-        print(f"🔄 Processing customer.subscription.updated")
-        subscription = event['data']['object']
-        await handle_subscription_updated(db, subscription)
-        
-    elif event['type'] == 'customer.subscription.deleted':
-        print(f"🗑️ Processing customer.subscription.deleted")
-        subscription = event['data']['object']
-        await handle_subscription_deleted(db, subscription)
-        
-    elif event['type'] == 'invoice.payment_succeeded':
-        print(f"💰 Processing invoice.payment_succeeded")
-        invoice = event['data']['object']
-        await handle_payment_succeeded(db, invoice)
-        
-    elif event['type'] == 'invoice.payment_failed':
-        print(f"❌ Processing invoice.payment_failed")
-        invoice = event['data']['object']
-        await handle_payment_failed(db, invoice)
-        
-    else:
-        print(f"⚠️ Unhandled event type: {event['type']}")
+    try:
+        if event['type'] == 'checkout.session.completed':
+            print(f"🛒 Processing checkout.session.completed")
+            session = event['data']['object']
+            await handle_checkout_completed(db, session)
+            
+        elif event['type'] == 'customer.subscription.created':
+            print(f"🆕 Processing customer.subscription.created")
+            subscription = event['data']['object']
+            await handle_subscription_created(db, subscription)
+            
+        elif event['type'] == 'customer.subscription.updated':
+            print(f"🔄 Processing customer.subscription.updated")
+            subscription = event['data']['object']
+            await handle_subscription_updated(db, subscription)
+            
+        elif event['type'] == 'customer.subscription.deleted':
+            print(f"🗑️ Processing customer.subscription.deleted")
+            subscription = event['data']['object']
+            await handle_subscription_deleted(db, subscription)
+            
+        elif event['type'] == 'invoice.payment_succeeded':
+            print(f"💰 Processing invoice.payment_succeeded")
+            invoice = event['data']['object']
+            await handle_payment_succeeded(db, invoice)
+            
+        elif event['type'] == 'invoice.payment_failed':
+            print(f"❌ Processing invoice.payment_failed")
+            invoice = event['data']['object']
+            await handle_payment_failed(db, invoice)
+            
+        else:
+            print(f"⚠️ Unhandled event type: {event['type']}")
+    except Exception as e:
+        print(f"❌ Error processing webhook {event['type']}: {str(e)}")
+        # Webhook'u başarısız olarak işaretleme, sadece logla
+        import traceback
+        traceback.print_exc()
     
     return {"status": "success"}
 
@@ -107,8 +113,8 @@ async def handle_checkout_completed(db, session):
         "stripe_customer_id": subscription.customer,
         "plan_id": plan_id,
         "status": subscription.status,
-        "current_period_start": datetime.fromtimestamp(subscription.current_period_start),
-        "current_period_end": datetime.fromtimestamp(subscription.current_period_end),
+        "current_period_start": datetime.fromtimestamp(subscription.current_period_start) if hasattr(subscription, 'current_period_start') else datetime.utcnow(),
+        "current_period_end": datetime.fromtimestamp(subscription.current_period_end) if hasattr(subscription, 'current_period_end') else datetime.utcnow(),
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
@@ -151,14 +157,20 @@ async def handle_subscription_created(db, subscription):
     if not user:
         return
     
+    update_data = {
+        "status": subscription["status"],
+        "updated_at": datetime.utcnow()
+    }
+    
+    # Sadece mevcut alanları ekle
+    if "current_period_start" in subscription:
+        update_data["current_period_start"] = datetime.fromtimestamp(subscription["current_period_start"])
+    if "current_period_end" in subscription:
+        update_data["current_period_end"] = datetime.fromtimestamp(subscription["current_period_end"])
+    
     await db.subscriptions.update_one(
         {"stripe_subscription_id": subscription["id"]},
-        {"$set": {
-            "status": subscription["status"],
-            "current_period_start": datetime.fromtimestamp(subscription["current_period_start"]),
-            "current_period_end": datetime.fromtimestamp(subscription["current_period_end"]),
-            "updated_at": datetime.utcnow()
-        }}
+        {"$set": update_data}
     )
     
     await db.logs.insert_one({
@@ -236,40 +248,54 @@ async def handle_subscription_deleted(db, subscription):
 
 async def handle_payment_succeeded(db, invoice):
     """Handle successful payment"""
+    # Invoice'da subscription alanı olmayabilir, kontrol et
+    if "subscription" not in invoice:
+        print(f"⚠️ Invoice'da subscription alanı yok: {invoice.get('id', 'unknown')}")
+        return
+    
     subscription_obj = await db.subscriptions.find_one({
         "stripe_subscription_id": invoice["subscription"]
     })
     
     if not subscription_obj:
+        print(f"⚠️ Subscription bulunamadı: {invoice['subscription']}")
         return
     
     user = await db.users.find_one({"_id": subscription_obj["user_id"]})
     if not user:
+        print(f"⚠️ User bulunamadı: {subscription_obj['user_id']}")
         return
     
     await db.logs.insert_one({
         "user_id": user["_id"],
         "action": "payment_succeeded",
-        "details": f"Stripe webhook: Ödeme başarılı - Tutar: ${invoice['amount_paid']/100}",
+        "details": f"Stripe webhook: Ödeme başarılı - Tutar: ${invoice.get('amount_paid', 0)/100}",
         "created_at": datetime.utcnow()
     })
 
 async def handle_payment_failed(db, invoice):
     """Handle failed payment"""
+    # Invoice'da subscription alanı olmayabilir, kontrol et
+    if "subscription" not in invoice:
+        print(f"⚠️ Invoice'da subscription alanı yok: {invoice.get('id', 'unknown')}")
+        return
+    
     subscription_obj = await db.subscriptions.find_one({
         "stripe_subscription_id": invoice["subscription"]
     })
     
     if not subscription_obj:
+        print(f"⚠️ Subscription bulunamadı: {invoice['subscription']}")
         return
     
     user = await db.users.find_one({"_id": subscription_obj["user_id"]})
     if not user:
+        print(f"⚠️ User bulunamadı: {subscription_obj['user_id']}")
         return
     
     await db.logs.insert_one({
         "user_id": user["_id"],
         "action": "payment_failed",
-        "details": f"Stripe webhook: Ödeme başarısız - Tutar: ${invoice['amount_due']/100}",
+        "details": f"Stripe webhook: Ödeme başarısız - Tutar: ${invoice.get('amount_due', 0)/100}",
         "created_at": datetime.utcnow()
     })
