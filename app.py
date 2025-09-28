@@ -66,6 +66,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 @app.exception_handler(Exception)
@@ -91,18 +92,34 @@ app.include_router(email_sending.router)
 app.include_router(subscription_management.router)
 
 @app.options("/{path:path}")
-async def options_handler(path: str):
+async def options_handler(request: Request, path: str):
     """OPTIONS isteği için CORS preflight handler"""
-    return JSONResponse(
-        status_code=200,
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Credentials": "true"
-        }
-    )
+    origin = request.headers.get("origin")
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "https://astoper.com",
+        "http://astoper.com",
+        "https://www.astoper.com",
+        "http://www.astoper.com"
+    ]
+    
+    if origin in allowed_origins:
+        return JSONResponse(
+            status_code=200,
+            content={},
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true"
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "CORS policy violation"}
+        )
 
 @app.get("/")
 async def root():
