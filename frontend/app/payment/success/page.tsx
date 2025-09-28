@@ -6,13 +6,16 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { apiService } from '@/lib/api'
+import { useAppStore } from '@/lib/store'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 function PaymentSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [planInfo, setPlanInfo] = useState<any>(null)
+  const { setUser } = useAppStore()
 
   const sessionId = searchParams.get('session_id')
   const planId = searchParams.get('plan_id')
@@ -21,18 +24,29 @@ function PaymentSuccessContent() {
     const fetchPlanInfo = async () => {
       if (planId) {
         try {
+          // Plan bilgilerini al
           const plans = await apiService.getPlans()
           const plan = plans.plans.find((p: any) => p._id === planId)
           setPlanInfo(plan)
+
+          // Kullanıcı bilgilerini güncelle (yeni plan ile)
+          const userProfile = await apiService.getUserProfile()
+          setUser(userProfile)
+
+          // Dashboard verilerini de güncelle
+          const dashboardData = await apiService.getDashboardData()
+          
+          toast.success('Plan başarıyla güncellendi! Artık yeni özelliklerinizi kullanabilirsiniz.')
         } catch (error) {
           console.error('Plan bilgileri yüklenemedi:', error)
+          toast.error('Plan bilgileri yüklenirken bir hata oluştu')
         }
       }
       setLoading(false)
     }
 
     fetchPlanInfo()
-  }, [planId])
+  }, [planId, setUser])
 
   if (loading) {
     return (

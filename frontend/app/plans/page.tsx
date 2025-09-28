@@ -15,21 +15,25 @@ export default function PlansPage() {
   const [subscription, setSubscription] = useState<any>(null)
   const [currentPlan, setCurrentPlan] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const { user } = useAppStore()
+  const { user, setUser } = useAppStore()
   const { costs, loading: costsLoading } = usePlanCosts()
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true)
-        const [plansData, subscriptionData, dashboardData] = await Promise.all([
+        const [plansData, subscriptionData, dashboardData, userProfile] = await Promise.all([
           apiService.getPlans(),
           apiService.getSubscription(),
-          apiService.getDashboardData()
+          apiService.getDashboardData(),
+          apiService.getUserProfile()
         ])
         
         setPlans(plansData.plans || [])
         setSubscription(subscriptionData.subscription)
+        
+        // Store'u güncelle
+        setUser(userProfile)
         
         if (dashboardData.plan) {
           console.log('Dashboard plan:', dashboardData.plan)
@@ -73,14 +77,18 @@ export default function PlansPage() {
 
   const refreshData = async () => {
     try {
-      const [plansData, subscriptionData, dashboardData] = await Promise.all([
+      const [plansData, subscriptionData, dashboardData, userProfile] = await Promise.all([
         apiService.getPlans(),
         apiService.getSubscription(),
-        apiService.getDashboardData()
+        apiService.getDashboardData(),
+        apiService.getUserProfile()
       ])
       
       setPlans(plansData.plans || [])
       setSubscription(subscriptionData.subscription)
+      
+      // Store'u güncelle
+      setUser(userProfile)
       
       if (dashboardData.plan) {
         const fullPlan = plansData.plans.find((p: any) => p.name === dashboardData.plan.name)

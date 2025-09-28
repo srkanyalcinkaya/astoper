@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isChecking } = useRequireAuth()
-  const { automations, subscription } = useAppStore()
+  const { automations, subscription, setUser } = useAppStore()
   const [stats, setStats] = useState({
     totalQueries: 0,
     emailsSent: 0,
@@ -48,6 +48,10 @@ export default function DashboardPage() {
         
         setRecentAutomations(data.recentAutomations || [])
         setPlanInfo(data.plan)
+
+        // Kullanıcı bilgilerini de güncelle (plan değişiklikleri için)
+        const userProfile = await apiService.getUserProfile()
+        setUser(userProfile)
       } catch (error) {
         console.error('Dashboard verileri yüklenirken hata:', error)
         toast.error('Dashboard verileri yüklenemedi')
