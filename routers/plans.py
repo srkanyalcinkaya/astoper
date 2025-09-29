@@ -1,10 +1,25 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from database import get_async_db
 from models import DEFAULT_PLANS
 from bson import ObjectId
 from typing import Dict, Any
+import jwt
+from config import settings
 
 router = APIRouter(prefix="/plans", tags=["plans"])
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current user from JWT token"""
+    try:
+        payload = jwt.decode(credentials.credentials, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 def calculate_plan_costs(plan_data: Dict[str, Any]) -> Dict[str, float]:
     """Plan maliyetlerini hesapla"""
@@ -144,3 +159,40 @@ async def get_plan_costs():
                 "profit_margin": round(((plan.get("price", 0) - cost_breakdown["total_cost"]) / plan.get("price", 1)) * 100, 1) if plan.get("price", 0) > 0 else 0
             })
         return {"cost_analysis": cost_data}
+
+@router.get("/limits")
+async def get_user_limits(current_user: str = Depends(get_current_user)):
+    """Get current user's plan limits"""
+    try:
+        from plan_limit_service import PlanLimitService
+        
+        db = await get_async_db()
+        user_id = ObjectId(current_user)
+        
+        user = await db.users.find_one({"_id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        plan = None
+        if user.get("plan_id"):
+            plan = await db.plans.find_one({"_id": user["plan_id"]})
+        
+        if not plan:
+            # Varsayılan ücretsiz plan limitleri
+            plan = {
+                "name": "Free",
+                "price": 0,
+                "max_emails_per_month": 0,
+                "max_templates": 1,
+                "max_queries_per_month": 0,
+                "max_file_uploads": 1,
+                "max_file_size_mb": 5
+            }
+        
+        limit_service = PlanLimitService()
+        limits = await limit_service.get_all_limits(current_user, plan)
+        
+        return limits
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Limit bilgileri alınamadı: {str(e)}")

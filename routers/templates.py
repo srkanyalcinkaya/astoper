@@ -351,7 +351,7 @@ async def generate_ai_template(
             )
         
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-002')
         
         prompt = f"""
         {request.prompt}
@@ -517,6 +517,7 @@ async def get_template(
 async def upload_template(
     file: UploadFile = File(...),
     template_name: str = None,
+    subject: str = None,
     current_user: str = Depends(get_current_user)
 ):
     """Hazır email şablonu yükle"""
@@ -558,10 +559,13 @@ async def upload_template(
         if not template_name:
             template_name = file.filename.split('.')[0]
         
+        # Email konusu belirtilmezse varsayılan değer kullan
+        email_subject = subject if subject else "Şablon Konusu"
+        
         new_template = {
             "user_id": user_id,
             "name": template_name,
-            "subject": "Şablon Konusu",  # Kullanıcı daha sonra düzenleyebilir
+            "subject": email_subject,
             "content": content_str,
             "is_active": True,
             "is_uploaded": True,  # Yüklenen şablon olduğunu belirt

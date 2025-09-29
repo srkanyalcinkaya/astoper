@@ -45,6 +45,7 @@ export default function TemplatesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadForm, setUploadForm] = useState({
     template_name: '',
+    subject: '',
     file: null as File | null
   })
   
@@ -92,6 +93,9 @@ export default function TemplatesPage() {
       const formData = new FormData()
       formData.append('file', uploadForm.file)
       formData.append('template_name', uploadForm.template_name)
+      if (uploadForm.subject) {
+        formData.append('subject', uploadForm.subject)
+      }
 
       await api.post('/templates/upload-template', formData, {
         headers: {
@@ -100,7 +104,7 @@ export default function TemplatesPage() {
       })
 
       alert('Şablon başarıyla yüklendi!')
-      setUploadForm({ template_name: '', file: null })
+      setUploadForm({ template_name: '', subject: '', file: null })
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
@@ -311,6 +315,20 @@ export default function TemplatesPage() {
                     placeholder="Şablon adını girin"
                     className="mt-1"
                   />
+                </div>
+
+                <div>
+                  <Label htmlFor="template_subject">Email Konusu (İsteğe Bağlı)</Label>
+                  <Input
+                    id="template_subject"
+                    value={uploadForm.subject}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, subject: e.target.value }))}
+                    placeholder="Email konusunu girin"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Boş bırakılırsa varsayılan konu kullanılır
+                  </p>
                 </div>
 
                 <div>

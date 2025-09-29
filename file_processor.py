@@ -152,15 +152,23 @@ class FileProcessor:
     def extract_emails_from_text(text: str) -> List[str]:
         """Metinden email adreslerini çıkar"""
         import re
-        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        
+        if not text or not text.strip():
+            return []
+        
+        # Word boundary olmadan email pattern - daha kapsamlı
+        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        
+        # Metindeki tüm email adreslerini bul
         emails = re.findall(email_pattern, text)
         
         valid_emails = []
         for email in emails:
+            email = email.strip().lower()
             if FileProcessor.is_valid_email(email):
-                valid_emails.append(email.lower())
+                valid_emails.append(email)
         
-        return list(set(valid_emails))  # Tekrarları kaldır ve küçük harfe çevir
+        return list(set(valid_emails))  # Tekrarları kaldır
     
     @staticmethod
     def is_valid_email(email: str) -> bool:
@@ -182,9 +190,7 @@ class FileProcessor:
                 return False
         
         invalid_patterns = [
-            'example.com', 'test.com', 'localhost', '127.0.0.1',
-            'admin@', 'noreply@', 'no-reply@', 'donotreply@',
-            'webmaster@', 'postmaster@', 'mailer-daemon@',
+            'localhost', '127.0.0.1',
             'www.', 'http://', 'https://', 'ftp://',
             'data:', 'javascript:', 'mailto:', 'tel:'
         ]
@@ -219,30 +225,66 @@ class FileProcessor:
             
             if file_type == 'excel' or file_type == 'csv':
                 try:
+                    logger.info(f"Excel/CSV dosyası işleniyor: {file_path}")
+                    
                     if file_path.endswith('.csv'):
-                        df = pd.read_csv(file_path)
+                        df = pd.read_csv(file_path, encoding='utf-8')
                     else:
-                        df = pd.read_excel(file_path)
+                        # Excel için farklı engine'ler dene
+                        try:
+                            df = pd.read_excel(file_path, engine='openpyxl')
+                        except Exception as e1:
+                            logger.warning(f"OpenPyXL ile okunamadı: {e1}, xlrd ile deneniyor...")
+                            try:
+                                df = pd.read_excel(file_path, engine='xlrd')
+                            except Exception as e2:
+                                logger.error(f"XLRD ile de okunamadı: {e2}")
+                                raise e1
+                    
+                    logger.info(f"Excel/CSV okundu: {len(df)} satır, {len(df.columns)} sütun")
                     
                     for column in df.columns:
                         for value in df[column].dropna():
                             value_str = str(value).strip()
-                            found_emails = FileProcessor.extract_emails_from_text(value_str)
-                            emails.extend(found_emails)
+                            if value_str:  # Boş değerleri atla
+                                found_emails = FileProcessor.extract_emails_from_text(value_str)
+                                emails.extend(found_emails)
+                                if found_emails:
+                                    logger.debug(f"Sütun '{column}' değer '{value_str}' den {len(found_emails)} email bulundu")
+                    
+                    logger.info(f"Excel/CSV'den toplam {len(emails)} email adresi çıkarıldı")
                     
                 except Exception as e:
                     logger.error(f"Excel/CSV okuma hatası: {e}")
+                    logger.error(f"Dosya yolu: {file_path}")
+                    # Hata durumunda boş liste döndür
+                    emails = []
             
             elif file_type == 'pdf':
                 try:
+                    logger.info(f"PDF dosyası işleniyor: {file_path}")
+                    
                     with open(file_path, 'rb') as file:
                         pdf_reader = PyPDF2.PdfReader(file)
-                        for page in pdf_reader.pages:
+                        logger.info(f"PDF okundu: {len(pdf_reader.pages)} sayfa")
+                        
+                        for page_num, page in enumerate(pdf_reader.pages):
                             text = page.extract_text()
-                            found_emails = FileProcessor.extract_emails_from_text(text)
-                            emails.extend(found_emails)
+                            if text and text.strip():  # Boş sayfaları atla
+                                found_emails = FileProcessor.extract_emails_from_text(text)
+                                emails.extend(found_emails)
+                                if found_emails:
+                                    logger.debug(f"Sayfa {page_num + 1}'den {len(found_emails)} email bulundu")
+                            else:
+                                logger.debug(f"Sayfa {page_num + 1} boş veya metin çıkarılamadı")
+                    
+                    logger.info(f"PDF'den toplam {len(emails)} email adresi çıkarıldı")
+                    
                 except Exception as e:
                     logger.error(f"PDF okuma hatası: {e}")
+                    logger.error(f"Dosya yolu: {file_path}")
+                    # Hata durumunda boş liste döndür
+                    emails = []
             
             elif file_type == 'docx':
                 try:
@@ -273,6 +315,7 @@ class FileProcessor:
             
         except Exception as e:
             logger.error(f"Dosya işleme hatası {file_path}: {e}")
+            logger.error(f"Dosya türü: {file_type}, Dosya boyutu: {os.path.getsize(file_path) if os.path.exists(file_path) else 'N/A'}")
             raise Exception(f"Dosya işleme hatası: {str(e)}")
     
     @staticmethod

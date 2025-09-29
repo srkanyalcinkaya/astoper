@@ -123,7 +123,11 @@ class EmailSendingService:
                     if smtp_config.get("use_tls", False):
                         server.starttls()
                 
-                server.login(smtp_config["username"], smtp_config["password"])
+                # Gmail için email adresini username olarak kullan
+                if smtp_config["host"] == "smtp.gmail.com":
+                    server.login(provider_data["email_address"], smtp_config["password"])
+                else:
+                    server.login(smtp_config["username"], smtp_config["password"])
                 
                 text = msg.as_string()
                 server.sendmail(provider_data["email_address"], recipient_email, text)
@@ -281,7 +285,11 @@ class EmailSendingService:
                     if smtp_config.get("use_tls", False):
                         server.starttls()
                 
-                server.login(smtp_config["username"], smtp_config["password"])
+                # Gmail için email adresini username olarak kullan
+                if smtp_config["host"] == "smtp.gmail.com":
+                    server.login(provider_data["email_address"], smtp_config["password"])
+                else:
+                    server.login(smtp_config["username"], smtp_config["password"])
                 
                 return {"success": True, "message": "Bağlantı başarılı"}
                 

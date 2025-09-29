@@ -171,7 +171,11 @@ async def test_email_provider(
                 if smtp_config["use_tls"]:
                     server.starttls()
             
-            server.login(smtp_config["username"], smtp_config["password"])
+            # Gmail için email adresini username olarak kullan
+            if smtp_config["host"] == "smtp.gmail.com":
+                server.login(provider["email_address"], smtp_config["password"])
+            else:
+                server.login(smtp_config["username"], smtp_config["password"])
             
             msg = MIMEMultipart()
             msg['From'] = provider["email_address"]

@@ -110,7 +110,7 @@ export default function EmailProvidersPage() {
       smtp_config: {
         host: info.smtp_host,
         port: info.smtp_port,
-        username: formData.smtp_config?.username || '',
+        username: provider_name === 'gmail' ? '' : (formData.smtp_config?.username || ''),
         password: '',
         use_ssl: provider_name === 'gmail' || provider_name === 'yahoo',
         use_tls: true
@@ -350,19 +350,21 @@ export default function EmailProvidersPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Kullanıcı Adı</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.smtp_config?.username || ''}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        smtp_config: { ...formData.smtp_config!, username: e.target.value }
-                      })}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                  {formData.provider_name !== 'gmail' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Kullanıcı Adı</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.smtp_config?.username || ''}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          smtp_config: { ...formData.smtp_config!, username: e.target.value }
+                        })}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Şifre</label>
@@ -377,7 +379,10 @@ export default function EmailProvidersPage() {
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      {providerInfo[formData.provider_name]?.instructions}
+                      {formData.provider_name === 'gmail' 
+                        ? 'Gmail için App Password kullanmanız önerilir. 2FA aktif olmalıdır. Kullanıcı adı alanı gereksizdir - email adresiniz otomatik olarak kullanılır.'
+                        : providerInfo[formData.provider_name]?.instructions
+                      }
                     </p>
                   </div>
 

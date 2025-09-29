@@ -5,6 +5,7 @@ from datetime import datetime
 import jwt
 import os
 import shutil
+import logging
 from bson import ObjectId
 
 from database import get_async_db
@@ -12,6 +13,8 @@ from models import FileUpload
 from schemas import FileUploadResponse, EmailCategory
 from config import settings
 from file_processor import FileProcessor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/files", tags=["files"])
 security = HTTPBearer()
@@ -59,19 +62,25 @@ async def upload_file(
     if user.get("plan_id"):
         plan = await db.plans.find_one({"_id": user["plan_id"]})
     
-    now = datetime.utcnow()
-    month_start = datetime(now.year, now.month, 1)
-    monthly_files = await db.file_uploads.count_documents({
-        "user_id": user_id,
-        "upload_date": {"$gte": month_start}
-    })
+    # Plan limit kontrolü
+    from plan_limit_service import PlanLimitService
+    limit_service = PlanLimitService()
     
-    file_limit = plan["max_file_uploads"] if plan else 1
-    if monthly_files >= file_limit:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Aylık dosya yükleme limitinize ulaştınız ({file_limit}). Paketinizi yükseltebilirsiniz."
-        )
+    if plan:
+        file_limit_check = await limit_service.check_file_upload_limit(current_user, plan)
+        if not file_limit_check["can_upload"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Dosya yükleme limitinize ulaştınız. Kullanılan: {file_limit_check['used']}/{file_limit_check['limit']}. Paketinizi yükseltebilirsiniz."
+            )
+    else:
+        # Plan yoksa varsayılan limit (1 dosya)
+        total_files = await db.file_uploads.count_documents({"user_id": user_id})
+        if total_files >= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Ücretsiz planınızda sadece 1 dosya yükleyebilirsiniz. Paket satın alarak limitinizi artırabilirsiniz."
+            )
     
     allowed_types = [
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # Excel
@@ -129,7 +138,7 @@ async def upload_file(
         "created_at": datetime.utcnow()
     })
     
-    return FileUploadResponse(
+    response_data = FileUploadResponse(
         id=file_id,
         filename=file.filename,
         file_path=file_path,
@@ -137,6 +146,14 @@ async def upload_file(
         file_type=file.content_type,
         message="Dosya başarıyla yüklendi"
     )
+    
+    # Frontend uyumluluğu için _id alanı ekle
+    response_dict = response_data.model_dump()
+    response_dict['_id'] = file_id
+    
+    logger.info(f"Dosya yükleme response: {response_dict}")
+    
+    return response_dict
 
 @router.get("/{file_id}", response_model=dict)
 async def get_file(
@@ -169,39 +186,58 @@ async def delete_file(
     current_user: str = Depends(get_current_user)
 ):
     """Delete a file"""
-    db = await get_async_db()
-    user_id = ObjectId(current_user)
-    
-    if not ObjectId.is_valid(file_id):
-        raise HTTPException(status_code=400, detail="Invalid file ID")
-    
-    file = await db.file_uploads.find_one({
-        "_id": ObjectId(file_id),
-        "user_id": user_id
-    })
-    
-    if not file:
-        raise HTTPException(status_code=404, detail="File not found")
-    
     try:
-        if os.path.exists(file["file_path"]):
-            os.remove(file["file_path"])
+        logger.info(f"Dosya silme isteği: file_id={file_id}, user_id={current_user}")
+        
+        db = await get_async_db()
+        user_id = ObjectId(current_user)
+        
+        if not file_id or file_id == "undefined" or file_id == "null":
+            logger.error(f"Geçersiz file_id: {file_id}")
+            raise HTTPException(status_code=400, detail="Geçersiz dosya ID")
+        
+        if not ObjectId.is_valid(file_id):
+            raise HTTPException(status_code=400, detail="Geçersiz dosya ID formatı")
+        
+        file = await db.file_uploads.find_one({
+            "_id": ObjectId(file_id),
+            "user_id": user_id
+        })
+        
+        if not file:
+            raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+        
+        # Dosyayı dosya sisteminden sil
+        try:
+            if os.path.exists(file["file_path"]):
+                os.remove(file["file_path"])
+                logger.info(f"Dosya silindi: {file['file_path']}")
+        except Exception as e:
+            logger.error(f"Dosya silme hatası: {e}")
+        
+        # Veritabanından sil
+        result = await db.file_uploads.delete_one({
+            "_id": ObjectId(file_id),
+            "user_id": user_id
+        })
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Dosya veritabanından silinemedi")
+        
+        await db.logs.insert_one({
+            "user_id": user_id,
+            "action": "file_deleted",
+            "details": f"Deleted file: {file['filename']}",
+            "created_at": datetime.utcnow()
+        })
+        
+        return {"message": "Dosya başarıyla silindi"}
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error deleting file: {e}")
-    
-    await db.file_uploads.delete_one({
-        "_id": ObjectId(file_id),
-        "user_id": user_id
-    })
-    
-    await db.logs.insert_one({
-        "user_id": user_id,
-        "action": "file_deleted",
-        "details": f"Deleted file: {file['filename']}",
-        "created_at": datetime.utcnow()
-    })
-    
-    return {"message": "Dosya başarıyla silindi"}
+        logger.error(f"Dosya silme hatası: {e}")
+        raise HTTPException(status_code=500, detail=f"Dosya silinemedi: {str(e)}")
 
 @router.get("/stats/summary", response_model=dict)
 async def get_file_stats(current_user: str = Depends(get_current_user)):
@@ -242,47 +278,56 @@ async def extract_emails_from_file(
     current_user: str = Depends(get_current_user)
 ):
     """Dosyadan email adreslerini çıkar"""
-    db = await get_async_db()
-    user_id = ObjectId(current_user)
-    
-    if not ObjectId.is_valid(file_id):
-        raise HTTPException(status_code=400, detail="Geçersiz dosya ID")
-    
-    file = await db.file_uploads.find_one({
-        "_id": ObjectId(file_id),
-        "user_id": user_id
-    })
-    
-    if not file:
-        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
-    
     try:
+        db = await get_async_db()
+        user_id = ObjectId(current_user)
+        
+        if not file_id or file_id == "undefined" or file_id == "null":
+            raise HTTPException(status_code=400, detail="Geçersiz dosya ID")
+        
+        if not ObjectId.is_valid(file_id):
+            raise HTTPException(status_code=400, detail="Geçersiz dosya ID formatı")
+        
+        file = await db.file_uploads.find_one({
+            "_id": ObjectId(file_id),
+            "user_id": user_id
+        })
+        
+        if not file:
+            raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+    
+        # Dosya yolunu kontrol et
+        if not os.path.exists(file["file_path"]):
+            raise HTTPException(status_code=404, detail="Dosya dosya sisteminde bulunamadı")
+        
+        # Dosyayı işle
         extracted_data = FileProcessor.process_file_from_path(file["file_path"])
         
-        from email_automation_service import EmailAutomationService
-        automation_service = EmailAutomationService()
+        if not extracted_data or not extracted_data.get("emails"):
+            return {
+                "emails": [],
+                "message": "Dosyada email adresi bulunamadı",
+                "total_found": 0
+            }
         
-        categorized_emails = []
+        # Sadece email adreslerini döndür, AI kategorilendirme yok
+        emails = []
         for email in extracted_data["emails"]:
-            category = automation_service.categorize_email_with_ai(email)
-            
-            categorized_emails.append(EmailCategory(
-                email=email,
-                category=category["category"],
-                confidence=category["confidence"],
-                website_url=None,  # Dosyadan çıkarılan emailler için URL yok
-                company_name="",
-                industry=category.get("industry", "")
-            ))
-        
-        categories = list(set([email.category for email in categorized_emails]))
+            emails.append({
+                "email": email,
+                "category": "general",
+                "confidence": 1.0,
+                "website_url": None,
+                "company_name": "",
+                "industry": ""
+            })
         
         await db.file_uploads.update_one(
             {"_id": ObjectId(file_id)},
             {"$set": {
                 "processed_data": {
-                    "emails_found": len(categorized_emails),
-                    "categories": categories,
+                    "emails_found": len(emails),
+                    "categories": ["general"],
                     "extracted_at": datetime.utcnow()
                 }
             }}
@@ -291,14 +336,14 @@ async def extract_emails_from_file(
         await db.logs.insert_one({
             "user_id": user_id,
             "action": "emails_extracted",
-            "details": f"Dosyadan {len(categorized_emails)} email adresi çıkarıldı: {file['filename']}",
+            "details": f"Dosyadan {len(emails)} email adresi çıkarıldı: {file['filename']}",
             "created_at": datetime.utcnow()
         })
         
         return {
-            "emails": [email.dict() for email in categorized_emails],
-            "total_found": len(categorized_emails),
-            "categories": categories,
+            "emails": emails,
+            "total_found": len(emails),
+            "categories": ["general"],
             "file_info": {
                 "filename": file["filename"],
                 "file_type": file["file_type"],
@@ -306,7 +351,10 @@ async def extract_emails_from_file(
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Email çıkarma hatası: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Email çıkarma hatası: {str(e)}"

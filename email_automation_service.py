@@ -20,12 +20,12 @@ class EmailAutomationService:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         
         try:
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            self.model = genai.GenerativeModel('gemini-1.5-flash-002')
             logger.info("EmailAutomationService başlatıldı (Google Gemini 1.5 Flash)")
         except Exception as e:
             logger.warning(f"Gemini 1.5 Flash bulunamadı: {e}")
             try:
-                self.model = genai.GenerativeModel('gemini-1.5-pro')
+                self.model = genai.GenerativeModel('gemini-1.5-pro-002')
                 logger.info("EmailAutomationService başlatıldı (Google Gemini 1.5 Pro)")
             except Exception as e2:
                 logger.error(f"Gemini modelleri bulunamadı: {e2}")

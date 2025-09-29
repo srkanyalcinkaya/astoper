@@ -10,8 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Upload, FileText, Mail, Send, CheckCircle, AlertCircle, Download, Trash2 } from 'lucide-react'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { usePlanLimits } from '@/lib/hooks/usePlanLimits'
 import { api } from '@/lib/api'
 import DashboardLayout from '@/components/layout/DashboardLayout'
+import { toast, ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
 interface FileUpload {
   _id: string
@@ -37,6 +40,7 @@ interface EmailResult {
 
 export default function FilesPage() {
   const { user } = useAuth()
+  const { limits, loading: limitsLoading } = usePlanLimits()
   const [files, setFiles] = useState<FileUpload[]>([])
   const [selectedFile, setSelectedFile] = useState<FileUpload | null>(null)
   const [emails, setEmails] = useState<EmailResult[]>([])
@@ -104,6 +108,12 @@ export default function FilesPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    // Plan limit kontrolü
+    if (limits && !limits.file_limit.can_upload) {
+      toast.error(`Dosya yükleme limitinize ulaştınız! Kullanılan: ${limits.file_limit.used}/${limits.file_limit.limit}. Paketinizi yükseltebilirsiniz.`)
+      return
+    }
+
     setIsUploading(true)
     try {
       const formData = new FormData()
@@ -115,24 +125,66 @@ export default function FilesPage() {
         },
       })
 
-      setFiles(prev => [response.data, ...prev])
-      setSelectedFile(response.data)
-    } catch (error) {
+      // Response'u debug et
+      console.log('Dosya yükleme response:', response.data)
+      
+      // Response'u frontend formatına çevir
+      const fileData = {
+        _id: response.data._id || response.data.id, // _id alanını garantile
+        filename: response.data.filename,
+        file_type: response.data.file_type,
+        file_size: response.data.file_size,
+        upload_date: new Date().toISOString(),
+        status: 'uploaded',
+        file_path: response.data.file_path,
+        message: response.data.message
+      }
+      
+      console.log('Oluşturulan fileData:', fileData)
+      console.log('FileData _id:', fileData._id)
+      console.log('FileData id:', fileData.id)
+      
+      setFiles(prev => {
+        const newFiles = [fileData, ...prev]
+        console.log('Yeni dosya listesi:', newFiles)
+        console.log('İlk dosyanın _id:', newFiles[0]?._id)
+        return newFiles
+      })
+      setSelectedFile(fileData)
+      console.log('Selected file set edildi:', fileData._id)
+      
+      toast.success('Dosya başarıyla yüklendi!')
+    } catch (error: any) {
       console.error('Dosya yükleme hatası:', error)
-      alert('Dosya yüklenemedi. Lütfen tekrar deneyin.')
+      const errorMessage = error.response?.data?.detail || 'Dosya yüklenemedi. Lütfen tekrar deneyin.'
+      toast.error(errorMessage)
     } finally {
       setIsUploading(false)
     }
   }
 
   const extractEmails = async (fileId: string) => {
+    if (!fileId || fileId === 'undefined' || fileId === 'null') {
+      alert('Geçersiz dosya ID')
+      return
+    }
+    
+    console.log('Email çıkarma başlatılıyor, fileId:', fileId)
+    
     setIsExtracting(true)
     try {
       const response = await api.post(`/files/${fileId}/extract-emails`)
       setEmails(response.data.emails || [])
-    } catch (error) {
+      
+      if (response.data.emails && response.data.emails.length === 0) {
+        alert('Bu dosyada email adresi bulunamadı.')
+      } else {
+        console.log('Email çıkarma başarılı:', response.data.emails?.length, 'email bulundu')
+      }
+    } catch (error: any) {
       console.error('Email çıkarma hatası:', error)
-      alert('Email adresleri çıkarılamadı. Lütfen tekrar deneyin.')
+      const errorMessage = error.response?.data?.detail || 'Email adresleri çıkarılamadı. Lütfen tekrar deneyin.'
+      alert(errorMessage)
     } finally {
       setIsExtracting(false)
     }
@@ -155,7 +207,18 @@ export default function FilesPage() {
   }
 
   const deleteFile = async (fileId: string) => {
+    console.log('deleteFile çağrıldı, fileId:', fileId)
+    console.log('Mevcut files state:', files)
+    console.log('Seçili dosya:', selectedFile)
+    
+    if (!fileId || fileId === 'undefined' || fileId === 'null') {
+      toast.error('Geçersiz dosya ID')
+      return
+    }
+
     if (!confirm('Bu dosyayı silmek istediğinizden emin misiniz?')) return
+
+    console.log('Dosya silme başlatılıyor, fileId:', fileId)
 
     try {
       await api.delete(`/files/${fileId}`)
@@ -165,8 +228,12 @@ export default function FilesPage() {
         setEmails([])
         setSelectedEmails([])
       }
-    } catch (error) {
+      console.log('Dosya başarıyla silindi')
+      toast.success('Dosya başarıyla silindi!')
+    } catch (error: any) {
       console.error('Dosya silme hatası:', error)
+      const errorMessage = error.response?.data?.detail || 'Dosya silinemedi. Lütfen tekrar deneyin.'
+      toast.error(errorMessage)
     }
   }
 
@@ -259,6 +326,14 @@ export default function FilesPage() {
               </CardTitle>
               <CardDescription>
                 Excel, CSV, PDF veya Word dosyalarınızı yükleyin
+                {limits && (
+                  <span className="block mt-2 text-sm">
+                    Dosya limiti: {limits.file_limit.used}/{limits.file_limit.limit === -1 ? '∞' : limits.file_limit.limit}
+                    {limits.file_limit.remaining > 0 && limits.file_limit.remaining !== -1 && (
+                      <span className="text-green-600"> ({limits.file_limit.remaining} kaldı)</span>
+                    )}
+                  </span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -269,20 +344,32 @@ export default function FilesPage() {
                   onChange={handleFileUpload}
                   accept=".xlsx,.csv,.pdf,.docx"
                   className="hidden"
+                  disabled={limits && !limits.file_limit.can_upload}
                 />
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Dosya Yüklemek İçin Tıklayın
+                  {limits && !limits.file_limit.can_upload ? 'Dosya Yükleme Limiti Doldu' : 'Dosya Yüklemek İçin Tıklayın'}
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  Excel, CSV, PDF veya Word dosyaları kabul edilir
+                  {limits && !limits.file_limit.can_upload 
+                    ? 'Dosya yükleme limitinize ulaştınız. Paketinizi yükseltebilirsiniz.'
+                    : 'Excel, CSV, PDF veya Word dosyaları kabul edilir'
+                  }
                 </p>
                 <Button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
+                  disabled={isUploading || (limits && !limits.file_limit.can_upload)}
                 >
-                  {isUploading ? 'Yükleniyor...' : 'Dosya Seç'}
+                  {isUploading ? 'Yükleniyor...' : 
+                   (limits && !limits.file_limit.can_upload) ? 'Limit Doldu' : 'Dosya Seç'}
                 </Button>
+                {limits && !limits.file_limit.can_upload && (
+                  <div className="mt-4">
+                    <Button variant="outline" onClick={() => window.location.href = '/plans'}>
+                      Paket Yükselt
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -312,7 +399,7 @@ export default function FilesPage() {
                             </Badge>
                           </div>
                           <p className="text-sm text-gray-500">
-                            Yüklenme: {new Date(file.upload_date).toLocaleDateString('tr-TR')}
+                            Yüklenme: {file.upload_date ? new Date(file.upload_date).toLocaleDateString('tr-TR') : 'Tarih bilinmiyor'}
                           </p>
                           {file.processed_data && (
                             <p className="text-sm text-green-600 mt-1">
@@ -326,9 +413,9 @@ export default function FilesPage() {
                             size="sm"
                             onClick={() => {
                               setSelectedFile(file)
-                              if (file.processed_data?.emails_found) {
-                                extractEmails(file._id)
-                              }
+                              // Email çıkarma işlemini sıfırla
+                              setEmails([])
+                              setSelectedEmails([])
                             }}
                           >
                             Seç
@@ -336,7 +423,11 @@ export default function FilesPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => deleteFile(file._id)}
+                            onClick={() => {
+                              console.log('Silme butonu tıklandı, file:', file)
+                              console.log('File _id:', file._id)
+                              deleteFile(file._id)
+                            }}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -378,7 +469,7 @@ export default function FilesPage() {
                       <h3 className="font-medium">{selectedFile.filename}</h3>
                       <p className="text-sm text-gray-500">
                         {formatFileSize(selectedFile.file_size)} • 
-                        {new Date(selectedFile.upload_date).toLocaleDateString('tr-TR')}
+                        {selectedFile.upload_date ? new Date(selectedFile.upload_date).toLocaleDateString('tr-TR') : 'Tarih bilinmiyor'}
                       </p>
                     </div>
                     <Button
@@ -527,6 +618,18 @@ export default function FilesPage() {
           )}
         </div>
       </div>
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
     </DashboardLayout>
   )
 }
