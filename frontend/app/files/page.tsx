@@ -142,7 +142,6 @@ export default function FilesPage() {
       
       console.log('Oluşturulan fileData:', fileData)
       console.log('FileData _id:', fileData._id)
-      console.log('FileData id:', fileData.id)
       
       setFiles(prev => {
         const newFiles = [fileData, ...prev]
