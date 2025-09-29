@@ -343,7 +343,7 @@ export default function FilesPage() {
                   onChange={handleFileUpload}
                   accept=".xlsx,.csv,.pdf,.docx"
                   className="hidden"
-                  disabled={limits && !limits.file_limit.can_upload}
+                  disabled={!!(limits && !limits.file_limit.can_upload)}
                 />
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -357,7 +357,7 @@ export default function FilesPage() {
                 </p>
                 <Button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || (limits && !limits.file_limit.can_upload)}
+                  disabled={isUploading || !!(limits && !limits.file_limit.can_upload)}
                 >
                   {isUploading ? 'Yükleniyor...' : 
                    (limits && !limits.file_limit.can_upload) ? 'Limit Doldu' : 'Dosya Seç'}
